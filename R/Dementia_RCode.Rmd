@@ -1,0 +1,373 @@
+---
+title: "Predictive Model for Diagnosis Dementia"
+output:
+  pdf_document: default
+  html_document: default
+date: "Fall Semester 2021"
+---
+
+```{r setup, include=FALSE, results='hide', message=FALSE, fig.show='hide'}
+knitr::opts_chunk$set(echo = TRUE)
+options(tinytex.verbose = TRUE)
+```
+
+# Import Packages
+```{r, results='hide'}
+library("ISLR")
+library("gbm")
+library("psych")
+library("corrplot")
+source("http://www.sthda.com/upload/rquery_cormat.r")
+library("Hmisc")
+library(class)
+library(MASS)
+library(caret)
+library(crossval)
+library("e1071")
+library(readr)
+library(reshape2)
+library(ggplot2)
+library(gridExtra)
+library(rpart)
+library(randomForest)
+```
+
+# Data Cleanup
+```{r, results='hide'}
+## Read Data 
+unclean_data <- read.table(file= "~/Desktop/GeorgiaTech/4_Fall_21/ISYE_7406/HW/Project/oasis_longitudinal.csv", sep = ",", header=TRUE)
+unclean_data
+## Reviewing Stats of Data and First 5 Rows
+dim(unclean_data)
+head(unclean_data)
+describe(unclean_data)
+
+## Removing Two ID Columns
+data <- unclean_data[3:dim(unclean_data)[2]] 
+
+## Changing the "Converted" Group to "Demented"
+data[,"Group"][data[,"Group"]=="Converted"]="Demented"
+
+describe(data)
+
+## Removing Hand from Data - Only Value is "R"
+data <- subset(data, select = -c(Hand))
+
+## Changing the Type of the Data
+data["Group"][data["Group"]!="Demented"]=0
+data["Group"][data["Group"]=="Demented"]=1
+data["M.F"][data["M.F"]=="M"]=1
+data["M.F"][data["M.F"]=="F"]=0
+
+names <- c("Group","M.F")
+data[,names] = lapply(data[,names],as.numeric)
+
+## Filling in NA Values with Mean
+data$MMSE[is.na(data$MMSE)] <- mean(data$MMSE,na.rm=TRUE)
+data$SES[is.na(data$SES)] <- mean(data$SES,na.rm=TRUE)
+
+```
+
+# Exploratory Analysis
+```{r}
+# Histograms of All the Variables
+jpeg("Hists_All.jpeg")
+hist.data.frame(data, breaks=30) # View the histograms of all the columns
+
+# Correlation Map of the Variables
+correlations = round(cor(data),2) # View the correlations
+jpeg("CorrMap.jpeg")
+corrplot(correlations, method="circle")
+
+# Pairs Plots of the Numeric Variables
+jpeg("Pairs.jpeg")
+cols = character(nrow(data))
+cols[] = "blue"
+cols[data$Group==1] = "red"
+pairs(data[,c(-1)], col=cols,oma=c(15,0,0,0))
+par(xpd = TRUE)
+legend("bottomright", fill = c("blue","red"), legend =c("Nondemented", "Demented"))
+```
+
+# Splitting the Data
+```{r}
+## Split to training and testing subset 
+set.seed(611)
+n = dim(data)[1]; ### total number of observations
+n1 = n*0.2
+
+flag = sort(sample(1:n, n1));
+data.train = data[-flag,]; data.test = data[flag,]; 
+
+
+## Extra the true response value for training and testing data
+y1 = data.train$Group;
+y2 = data.test$Group;
+```
+
+# Models
+```{r}
+# ------- Logistic Regression ------- #
+
+## A. Logistic regression: 0.2021858
+modA <- glm(Group ~ ., data = data.train, family="binomial");
+y2hatA <- ifelse(predict(modA, data.test[,-1], type="response") < 0.5, 0, 1)
+
+# Creating a Confusion Matrix
+modA.cm = confusionMatrix(y2hatA, y2, negative=0)
+
+# Accuracy / Sensitivity of Model
+modA.diag = diagnosticErrors(modA.cm)
+
+# ------- Naive Bayes ------- #
+
+## B. Naive Bayes (with full X).
+modB <- naiveBayes(as.factor(Group) ~. , data = data.train)
+y2hatB <- predict(modB, newdata = data.test)
+
+# Creating a Confusion Matrix
+modB.cm = confusionMatrix(y2hatB, y2, negative="0")
+
+# Accuracy / Sensitivity of Model
+modB.diag = diagnosticErrors(modB.cm)
+
+# ------- Single Tree ------- #
+
+## C: a single Tree: 0.2240437
+modC0 <- rpart(Group ~ .,data=data.train, method="class", 
+                     parms=list(split="gini"))
+opt <- which.min(modC0$cptable[, "xerror"]); 
+cp1 <- modC0$cptable[opt, "CP"];
+modC <- prune(modC0,cp=cp1);
+y2hatC <-  predict(modC, data.test[,-1], type="class")
+
+# Creating a Confusion Matrix
+modC.cm = confusionMatrix(y2hatC, y2, negative="0")
+
+# Accuracy / Sensitivity of Model
+modC.diag = diagnosticErrors(modC.cm)
+
+# ------- Random Forest  ------- #
+
+# Tuning the parameters
+control <- trainControl(method="repeatedcv", number=10, repeats=10, search="random")
+metric <- "Accuracy"
+mtry <- sqrt(ncol(data.train[,-1]))
+rf_random <- train(as.factor(Group)~., data=data.train, method="rf", metric=metric, tuneLength=15, trControl=control)
+
+# Selected Parameters
+jpeg("rf_random.jpg")
+plot(rf_random)
+
+modD.pred = predict(rf_random, data.test[,-1])
+# Creating a Confusion Matrix
+modD.cm = confusionMatrix(modD.pred, y2, negative=0)
+
+# Accuracy / Sensitivity of Model
+modD.diag = diagnosticErrors(modD.cm)
+
+# ------- Log. Regression with Step AIC ------- #
+
+## E. Logistic regression (w/Stepwise Regression Using AIC): 0.2021858
+modE <- step(modA);
+y2hatE <- ifelse(predict(modE, data.test[,-1], type="response") < 0.5, 0, 1)
+
+# Creating a Confusion Matrix
+modE.cm = confusionMatrix(y2hatE, y2, negative=0)
+
+# Accuracy / Sensitivity of Model
+modE.diag = diagnosticErrors(modE.cm)
+
+# ------- Log. Regression with Step BIC ------- #
+
+## F. Logistic regression (w/Stepwise Regression Using BIC): 0.2021858
+modF <- step(modA,k=log(dim(data.train)[1]));
+y2hatF <- ifelse(predict(modF, data.test[,-1], type="response") < 0.5, 0, 1)
+
+# Creating a Confusion Matrix
+modF.cm = confusionMatrix(y2hatF, y2, negative=0)
+
+# Accuracy / Sensitivity of Model
+modF.diag = diagnosticErrors(modF.cm)
+
+# ------- Boosting ------- #
+
+modG <- gbm(Group ~ .,data=data.train,
+                 distribution = 'bernoulli',
+                   n.trees = 5000, 
+                   shrinkage = 0.01, 
+                   interaction.depth = 3,
+                   cv.folds = 10)
+jpeg("Bern_Dev.jpeg")
+perf_gbm1 = gbm.perf(modG, method="cv") 
+
+## summary model
+## Which variances are important
+jpeg("Relative_Influence.jpeg")
+summary(modG)
+
+## Make Prediction
+## use "predict" to find the training or testing error
+
+## Testing Error # 0.1693989
+y2hatG <- ifelse(predict(modG ,newdata = data.test[,-1], n.trees=perf_gbm1, type="response") < 0.5, 0, 1)
+
+# Creating a Confusion Matrix
+modG.cm = confusionMatrix(y2hat, y2, negative="0")
+
+# Accuracy / Sensitivity of Model
+modG.diag = diagnosticErrors(modG.cm)
+
+# ------- QDA ------- #
+
+modH <- qda(Group ~., data = data.train) # Model
+
+# Predicting Values from Model
+modH.pred = predict(modH, data.test[,-1])$class
+
+# Creating a Confusion Matrix 
+modH.cm = confusionMatrix(modH.pred, y2, negative=0)
+
+# Accuracy / Sensitivity of Model
+modH.diag = diagnosticErrors(modH.cm)
+modH.diag
+
+# ------- LDA ------- #
+
+modI <- lda(Group ~., data = data.train) # Model
+
+# Predicting Values from Model
+modI.pred = predict(modI, data.test)$class
+
+# Creating a Confusion Matrix 
+modI.cm = confusionMatrix(modI.pred, data.test$Group, negative=0)
+
+# Accuracy / Sensitivity of Model
+modI.diag = diagnosticErrors(modI.cm)
+
+# ------- KNN ------- #
+
+cvtesterror <- NULL
+cvtrainerror <- NULL
+ks = c(1:15)
+for (kk in ks){
+  xtrainnew <- data.train[,-1];
+  xtestnew <- data.test[,-1];
+  
+  ypred.train <- knn(data.train[,-1], xtrainnew, data.train[,1], k=kk);
+  ypred.test <- knn(data.train[,-1], xtestnew, data.train[,1], k=kk);
+  
+  temptrainerror = round(mean(ypred.train != data.train[,1]),4)
+  temptesterror = round(mean(ypred.test != data.test[,1]),4)
+
+  cvtrainerror = rbind(cvtrainerror, temptrainerror)
+  cvtesterror = rbind(cvtesterror, temptesterror)
+}
+
+# Plotting the train/test errors for each of the k-values
+jpeg("KNN_error_rates.jpeg")
+plot(ks, cvtrainerror, col="red", type="b",ylim = c(0,0.7), ylab="Error Rates", xlab="k-values", main="KNN - Error Rates v. k-values")
+lines(ks, cvtesterror, col="blue", type="b")
+legend(12, 0.15, legend=c("Train Error", "Test Error"), col=c("red", "blue"), lty=1:2, cex=0.8)
+
+# Selecting the best k-value from the test error rate
+k.best = min(which(cvtesterror==min(cvtesterror)))
+
+# Running model with the best k-value
+modJ = knn(data.train[,-1], xtestnew, data.train[,1], k=k.best)
+
+# Creating a Confusion Matrix with KNN Predictions
+modJ.cm = confusionMatrix(modJ, data.test$Group, negative=0)
+
+# Accuracy / Sensitivity of Model
+modJ.diag = diagnosticErrors(modJ.cm)
+
+# ------- PCA-KNN ------- #
+
+train.columns.var = apply(data.train[,-1], 2, var)
+train.zeroVarRemoved = (data.train[, c(F, train.columns.var!=0)])
+pca.res = prcomp(train.zeroVarRemoved, scale=T)
+
+std_dev <- pca.res$sdev
+pr_var <- std_dev^2
+prop_varex <- pr_var/sum(pr_var)
+
+# Scree plot for PCA
+jpeg("scree_PCA.jpg")
+plot(prop_varex, main ="Scree Plot",xlab = "Principal Component",
+             ylab = "Proportion of Variance Explained",
+             type = "b")
+
+data.train.pca = pca.res$x
+data.test.pca = predict(pca.res, data.test)
+
+cvtesterror <- NULL
+cvtrainerror <- NULL
+ks = c(1:15)
+for (kk in ks){
+  xtrainnew <- data.train[,-1];
+  xtestnew <- data.test[,-1];
+  
+  ypred.train <- knn(data.train.pca, data.train.pca, data.train[,1], k=kk);
+  ypred.test <- knn(data.train.pca, data.test.pca, data.train[,1], k=kk);
+  
+  temptrainerror = round(mean(ypred.train != data.train[,1]),4)
+  temptesterror = round(mean(ypred.test != data.test[,1]),4)
+
+  cvtrainerror = rbind(cvtrainerror, temptrainerror)
+  cvtesterror = rbind(cvtesterror, temptesterror)
+}
+
+# Plotting the train/test errors for each of the k-values
+jpeg("PCA_KNN_error_rates.jpeg")
+plot(ks, cvtrainerror, col="red", type="b", ylim=c(0,0.3), ylab="Error Rates", xlab="k-values", main="PCA-KNN - Error Rates v. k-values")
+lines(ks, cvtesterror, col="blue", type="b")
+legend(1, 0.3, legend=c("Train Error", "Test Error"), col=c("red", "blue"), lty=1:2, cex=0.8)
+
+# Predicting Values from Model
+modK.pred <- knn(data.train.pca, data.test.pca, data.train[,1], k=3)
+
+# Creating a Confusion Matrix
+modK.cm = confusionMatrix(modK.pred, y2, negative=0)
+
+# Accuracy / Sensitivity of Model
+modK.diag = diagnosticErrors(modK.cm)
+```
+
+```{r}
+dim(data)
+```
+
+# Table with Diagnostics for Each Model
+```{r}
+diag.all = round(matrix(c(
+                    as.vector(modA.diag[1:6]),
+                    as.vector(modE.diag[1:6]),
+                    as.vector(modF.diag[1:6]),
+                    as.vector(modB.diag[1:6]),
+                    as.vector(modC.diag[1:6]),
+                    as.vector(modD.diag[1:6]),
+                    as.vector(modG.diag[1:6]),
+                    as.vector(modH.diag[1:6]),
+                    as.vector(modI.diag[1:6]),
+                    as.vector(modJ.diag[1:6]),
+                    as.vector(modK.diag[1:6])
+                    )
+                  ,byrow=TRUE, ncol=6),3)
+rownames(diag.all) = c("Log. Reg",
+                       "Log. Reg - Step (AIC)", 
+                       "Log. Reg - Step (BIC)",
+                       "Naive Bayes",
+                       "Single Tree", 
+                       "Random Forest",
+                       "Boosting",
+                       "QDA",
+                       "LDA",
+                       "KNN",
+                       "PCA-KNN"
+                       )
+colnames(diag.all) = rownames(as.data.frame(gbm.diag[1:6]))
+
+diag.all = as.table(diag.all)
+diag.all
+```
