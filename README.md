@@ -121,7 +121,25 @@ You will need to install R and RStudio to work on this project. To install R and
 * [R](https://cran.r-project.org/)
 * [RStudio](https://www.rstudio.com/)
 
-#### Packages
+#### Packages Needed
+
+* [ISLR](https://cran.r-project.org/web/packages/ISLR/index.html)
+* [gbm](https://cran.r-project.org/package=gbm)
+* [psych](https://cran.r-project.org/web/packages/psych/index.html)
+* [corrplot](https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html)
+* [Hmisc](https://cran.r-project.org/web/packages/Hmisc/index.html)
+* [class](https://cran.r-project.org/web/packages/class/class.pdf)
+* [MASS](https://cran.r-project.org/web/packages/MASS/MASS.pdf)
+* [caret](https://cran.r-project.org/web/packages/caret/caret.pdf)
+* [crossval](https://cran.r-project.org/package=crossval)
+* [e1071](https://cran.r-project.org/package=e1071)
+* [readr](https://cran.r-project.org/package=readr)
+* [reshape2](https://cran.r-project.org/package=reshape2)
+* [ggplot2](https://www.rdocumentation.org/packages/ggplot2/versions/3.3.5)
+* [gridExtra](https://cran.r-project.org/package=gridExtra)
+* [rpart](https://cran.r-project.org/web/packages/rpart/rpart.pdf)
+* [randomForest](https://www.rdocumentation.org/packages/randomForest/versions/4.6-14/topics/randomForest)
+
 <!-- 
 1. Get a free API Key at [https://example.com](https://example.com)
 2. Clone the repo
