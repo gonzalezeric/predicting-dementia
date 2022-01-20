@@ -105,20 +105,23 @@ The dementia dataset is from Kaggle (https://www.kaggle.com/shashwatwork/dementi
 <!-- This is an example of how you may give instructions on setting up your project locally.
 To get a local copy up and running follow these simple example steps. -->
 
-### Prerequisites
+<!-- ### Prerequisites -->
 <!-- 
 This is an example of how to list things you need to use the software and how to install them.
 * npm
   ```sh
   npm install npm@latest -g
   ``` -->
-To install R and R Studio, please visit the following websites:
+### Installation
+
+#### Software
+You will need to install R and RStudio to work on this project. To install R and RStudio, please visit the following websites:
 
 * [Installation Guide](https://rstudio-education.github.io/hopr/starting.html)
 * [R](https://cran.r-project.org/)
 * [RStudio](https://www.rstudio.com/)
 
-### Installation
+#### Packages
 <!-- 
 1. Get a free API Key at [https://example.com](https://example.com)
 2. Clone the repo
