@@ -112,6 +112,11 @@ This is an example of how to list things you need to use the software and how to
   ```sh
   npm install npm@latest -g
   ``` -->
+To install R and R Studio, please visit the following websites:
+
+* [Installation Guide](https://rstudio-education.github.io/hopr/starting.html)
+* [R](https://cran.r-project.org/)
+* [RStudio](https://www.rstudio.com/)
 
 ### Installation
 <!-- 
